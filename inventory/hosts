@@ -1,0 +1,14 @@
+[dnf_repo_servers]
+# Add your daily management servers or repo mirror hosts here
+# Example:
+# repo-mirror-01 ansible_host=10.0.0.50 ansible_user=root
+
+[production]
+# prod-server-01
+
+[staging]
+# staging-server-01
+
+[all:vars]
+# ansible_ssh_private_key_file=~/.ssh/id_ed25519
+# ansible_python_interpreter=/usr/bin/python3
