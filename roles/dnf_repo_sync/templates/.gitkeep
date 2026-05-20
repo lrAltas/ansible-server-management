@@ -1,0 +1,2 @@
+# Placeholder to keep the templates/ directory in git
+# Add Jinja2 templates here (e.g. custom nginx.conf.j2, repo client .repo.j2 files)
