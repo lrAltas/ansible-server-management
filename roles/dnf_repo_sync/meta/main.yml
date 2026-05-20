@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  author: lrAltas
+  description: Synchronize and mirror DNF/YUM repositories for local mirrors, daily server management, and air-gapped environments.
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+    - name: Fedora
+      versions:
+        - all
+  galaxy_tags:
+    - dnf
+    - yum
+    - repository
+    - mirror
+    - reposync
+    - packaging
+    - system
+
+dependencies: []
+# Add dependencies if needed, e.g. geerlingguy.nginx or geerlingguy.apache when serving
