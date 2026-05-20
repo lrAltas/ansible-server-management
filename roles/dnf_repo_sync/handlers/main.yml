@@ -1,0 +1,19 @@
+---
+# Handlers for dnf_repo_sync role
+
+- name: Restart web server
+  ansible.builtin.service:
+    name: "{{ dnf_repo_sync_web_server }}"
+    state: restarted
+  listen: "restart web server"
+  when: dnf_repo_sync_serve_repos | bool
+
+- name: Reload firewalld
+  ansible.posix.firewalld:
+    # This is just to trigger reload if needed; actual port management in tasks
+    service: http
+    state: enabled
+    permanent: true
+    immediate: true
+  listen: "reload firewall"
+  when: dnf_repo_sync_manage_firewall | bool
