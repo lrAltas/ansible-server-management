@@ -1,0 +1,101 @@
+---
+# Main tasks for dnf_repo_sync role
+# This role syncs DNF repositories and optionally serves them
+
+- name: Ensure required packages are installed
+  ansible.builtin.package:
+    name: "{{ dnf_repo_sync_packages }}"
+    state: present
+  tags: [dnf, packages, sync]
+
+- name: Create base repository directory
+  ansible.builtin.file:
+    path: "{{ dnf_repo_sync_base_path }}"
+    state: directory
+    owner: "{{ dnf_repo_sync_repo_owner }}"
+    group: "{{ dnf_repo_sync_repo_group }}"
+    mode: '0755'
+  tags: [dnf, directories, sync]
+
+- name: Create per-repository directories
+  ansible.builtin.file:
+    path: "{{ dnf_repo_sync_base_path }}/{{ item.name }}"
+    state: directory
+    owner: "{{ dnf_repo_sync_repo_owner }}"
+    group: "{{ dnf_repo_sync_repo_group }}"
+    mode: '0755'
+  loop: "{{ dnf_repo_sync_repos }}"
+  tags: [dnf, directories, sync]
+
+- name: Synchronize repositories using reposync
+  ansible.builtin.command:
+    cmd: >-
+      reposync
+      {% if item.baseurl is defined %}-u {{ item.baseurl }}{% else %}-r {{ item.repoid | default(item.name) }}{% endif %}
+      -p {{ dnf_repo_sync_base_path }}/{{ item.name }}
+      --arch {{ item.arch | default('x86_64') }}
+      {% if item.releasever is defined %}--releasever {{ item.releasever }}{% endif %}
+      {{ dnf_repo_sync_reposync_options }}
+    creates: "{{ dnf_repo_sync_base_path }}/{{ item.name }}/repodata/repomd.xml"
+  loop: "{{ dnf_repo_sync_repos }}"
+  register: reposync_result
+  changed_when: reposync_result.rc == 0
+  tags: [dnf, sync, reposync]
+  # Note: The 'creates' makes it somewhat idempotent if repodata exists.
+  # For forced re-sync, use --force or remove creates condition / use shell.
+
+- name: Update repository metadata with createrepo
+  ansible.builtin.command:
+    cmd: createrepo --update {{ dnf_repo_sync_base_path }}/{{ item.name }}
+  loop: "{{ dnf_repo_sync_repos }}"
+  tags: [dnf, sync, createrepo]
+  changed_when: false  # createrepo --update is usually fast
+
+- name: Install web server for serving mirrored repos
+  ansible.builtin.package:
+    name: "{{ dnf_repo_sync_web_server }}"
+    state: present
+  when: dnf_repo_sync_serve_repos | bool
+  tags: [web, nginx, httpd, serve]
+
+- name: Ensure web server is enabled and running
+  ansible.builtin.service:
+    name: "{{ dnf_repo_sync_web_server }}"
+    state: started
+    enabled: true
+  when: dnf_repo_sync_serve_repos | bool
+  notify: Restart web server
+  tags: [web, serve]
+
+- name: Set SELinux context for web served content (httpd_sys_content_t)
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when:
+    - dnf_repo_sync_serve_repos | bool
+    - dnf_repo_sync_manage_selinux | bool
+    - ansible_selinux.status == 'enabled'
+  tags: [selinux, web]
+
+- name: Open firewall ports for HTTP/HTTPS
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ dnf_repo_sync_firewall_ports }}"
+  when: dnf_repo_sync_manage_firewall | bool
+  notify: Reload firewalld
+  tags: [firewall, network]
+
+- name: Display sync completion info
+  ansible.builtin.debug:
+    msg: |
+      DNF repo sync completed.
+      Mirrored repos location: {{ dnf_repo_sync_base_path }}/
+      {% if dnf_repo_sync_serve_repos %}
+      Access via: http://{{ ansible_default_ipv4.address | default('your-server-ip') }}/repos/<repo-name>/
+      {% endif %}
+      Update your client repo files to point to the local mirror for faster updates.
+  tags: [debug, info]
