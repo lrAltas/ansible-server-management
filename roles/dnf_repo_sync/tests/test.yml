@@ -1,0 +1,8 @@
+---
+# Basic test for dnf_repo_sync role (run with molecule or ansible-playbook --check)
+- name: Test dnf_repo_sync role syntax and basic execution
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - dnf_repo_sync
