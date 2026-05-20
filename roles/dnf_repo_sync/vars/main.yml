@@ -1,0 +1,3 @@
+---
+# Internal variables for dnf_repo_sync (override in defaults or group_vars if needed)
+# Currently empty - add computed vars here if role grows complex
