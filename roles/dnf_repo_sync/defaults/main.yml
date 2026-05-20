@@ -1,71 +1,54 @@
 ---
-# Default variables for dnf_repo_sync Ansible role
-# Customize in group_vars, host_vars or playbook vars as needed
+# dnf_repo_sync role - defaults (override in group_vars, host_vars or playbook)
+# All configurable paths, behaviors, and sources are variable-driven as requested.
 
-# Base path where mirrored repositories will be stored
-# Final structure: {{ dnf_repo_sync_base_path }}/{{ item.name }}/
-dnf_repo_sync_base_path: /var/www/html/repos
+# === Core Paths ===
+dnf_repo_sync_base_path: /var/www/html/repos          # Root directory for all mirrored repos
+dnf_repo_sync_repo_owner: root
+dnf_repo_sync_repo_group: root
 
-# Enable/disable serving the mirrored repos via a web server
+# === Sync Behavior ===
+dnf_repo_sync_state: present          # 'present' = create/sync, 'absent' = clean/remove local mirror
+dnf_repo_sync_clean: false            # When true + state=present, purge local dir before fresh sync (use with caution)
+
+# Reposync options (passed to reposync)
+# --delete : remove local packages that no longer exist upstream (keeps mirror clean)
+# --newest-only : only keep latest version of each package
+dnf_repo_sync_reposync_options: "--download-metadata --downloadcomps --delete --newest-only"
+
+# === Web Server (optional) ===
 dnf_repo_sync_serve_repos: true
-
-# Web server to use for serving repos: 'nginx' or 'httpd' (apache)
 dnf_repo_sync_web_server: nginx
 
-# List of repositories to synchronize.
-# You can specify either:
-#   - repoid (must exist/enabled on the target host, e.g. from /etc/yum.repos.d/)
-#   - baseurl for direct mirror (recommended for reliability)
+# === Firewall & SELinux ===
+dnf_repo_sync_manage_firewall: true
+dnf_repo_sync_firewall_ports:
+  - "80/tcp"
+  - "443/tcp"
+dnf_repo_sync_manage_selinux: true
+
+# === Sources to Mirror (DICT format - edit this!) ===
+# Key = short unique name for the repo (used as repoid in reposync)
+# upstream_url = full URL to the directory you want to mirror (packages + repodata etc.)
+# You can add any number of entries. This role will sync EXACTLY the content under upstream_url.
 #
-# Example for Rocky Linux 9:
-dnf_repo_sync_repos:
-  - name: rocky-9-baseos
-    repoid: baseos
-    arch: x86_64
-    releasever: "9"
-    # Alternative with direct URL (uncomment and adjust):
-    # baseurl: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
+# Example for CentOS 9 Stream / Rocky 9 (you edit the URLs):
+dnf_repo_sync_sources:
+  rocky9-baseos:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
+    # Optional: you can override local subdir if needed
+    # local_subdir: rocky/9/BaseOS/x86_64/os
 
-  - name: rocky-9-appstream
-    repoid: appstream
-    arch: x86_64
-    releasever: "9"
+  rocky9-appstream:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
 
-  # Add more repos as needed, e.g.:
-  # - name: rocky-9-crb
-  #   repoid: crb
-  #   arch: x86_64
-  #   releasever: "9"
-  #
-  # For EPEL (requires epel-release installed or use baseurl):
-  # - name: epel-9
-  #   baseurl: "https://download.fedoraproject.org/pub/epel/9/Everything/x86_64/"
-  #   arch: x86_64
+  # Add more as you like, e.g. CRB, EPEL, or any other mirror path you have
+  # rocky9-crb:
+  #   upstream_url: "https://download.rockylinux.org/pub/rocky/9/CRB/x86_64/os/"
 
-# Packages required on the mirror server
+# Packages required on the mirror host (CentOS 9 / Rocky 9 / RHEL 9)
 dnf_repo_sync_packages:
   - dnf-utils
   - createrepo
   - rsync
   - firewalld
-
-# Additional reposync options (see man reposync)
-# --download-metadata : download repomd.xml and related
-# --downloadcomps : download comps.xml (group info)
-# --delete : delete local packages no longer in upstream
-# --newest-only : only download latest version of each package (saves space)
-dnf_repo_sync_reposync_options: "--download-metadata --downloadcomps --delete --newest-only"
-
-# Whether to manage firewall (open HTTP/HTTPS ports)
-dnf_repo_sync_manage_firewall: true
-
-dnf_repo_sync_firewall_ports:
-  - "80/tcp"
-  - "443/tcp"
-
-# SELinux management (set httpd context if using web server)
-dnf_repo_sync_manage_selinux: true
-
-# Owner/group for the repo files (for web serving)
-dnf_repo_sync_repo_owner: root
-dnf_repo_sync_repo_group: root
