@@ -1,0 +1,18 @@
+---
+# 预检查与验证
+- name: Validate that dnf_repo_sync_sources is defined and not empty
+  ansible.builtin.assert:
+    that:
+      - dnf_repo_sync_sources is defined
+      - dnf_repo_sync_sources | length > 0
+    fail_msg: "dnf_repo_sync_sources 未定义或为空！请在 vars/main.yml 中配置至少一个要同步的源"
+  when: dnf_repo_sync_state == 'present'
+
+- name: Show sync plan
+  ansible.builtin.debug:
+    msg: |
+      🚀 本次将同步以下 {{ dnf_repo_sync_sources | length }} 个仓库：
+      {% for key, val in dnf_repo_sync_sources.items() %}
+        - {{ key }} ← {{ val.upstream_url }}
+      {% endfor %}
+  when: dnf_repo_sync_state == 'present'
