@@ -1,54 +1,30 @@
 ---
-# dnf_repo_sync role - defaults (override in group_vars, host_vars or playbook)
-# All configurable paths, behaviors, and sources are variable-driven as requested.
+# dnf_repo_sync defaults
+# 这个文件主要用于提供默认值，实际配置请在 vars/main.yml 中修改（更容易维护）
 
-# === Core Paths ===
-dnf_repo_sync_base_path: /var/www/html/repos          # Root directory for all mirrored repos
+# 以下是与 vars 中相同的默认值，便于角色独立使用
+
+dnf_repo_sync_base_path: /var/www/html/repos
 dnf_repo_sync_repo_owner: root
 dnf_repo_sync_repo_group: root
 
-# === Sync Behavior ===
-dnf_repo_sync_state: present          # 'present' = create/sync, 'absent' = clean/remove local mirror
-dnf_repo_sync_clean: false            # When true + state=present, purge local dir before fresh sync (use with caution)
+dnf_repo_sync_sources: {}
 
-# Reposync options (passed to reposync)
-# --delete : remove local packages that no longer exist upstream (keeps mirror clean)
-# --newest-only : only keep latest version of each package
+dnf_repo_sync_auto_update: false
+dnf_repo_sync_cron_minute: "0"
+dnf_repo_sync_cron_hour: "3"
+dnf_repo_sync_cron_day: "*"
+dnf_repo_sync_cron_month: "*"
+dnf_repo_sync_cron_weekday: "*"
+dnf_repo_sync_cron_job_name: "update-dnf-repos"
+
+dnf_repo_sync_clean: false
+dnf_repo_sync_state: present
 dnf_repo_sync_reposync_options: "--download-metadata --downloadcomps --delete --newest-only"
-
-# === Web Server (optional) ===
 dnf_repo_sync_serve_repos: true
 dnf_repo_sync_web_server: nginx
-
-# === Firewall & SELinux ===
 dnf_repo_sync_manage_firewall: true
 dnf_repo_sync_firewall_ports:
   - "80/tcp"
   - "443/tcp"
 dnf_repo_sync_manage_selinux: true
-
-# === Sources to Mirror (DICT format - edit this!) ===
-# Key = short unique name for the repo (used as repoid in reposync)
-# upstream_url = full URL to the directory you want to mirror (packages + repodata etc.)
-# You can add any number of entries. This role will sync EXACTLY the content under upstream_url.
-#
-# Example for CentOS 9 Stream / Rocky 9 (you edit the URLs):
-dnf_repo_sync_sources:
-  rocky9-baseos:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
-    # Optional: you can override local subdir if needed
-    # local_subdir: rocky/9/BaseOS/x86_64/os
-
-  rocky9-appstream:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
-
-  # Add more as you like, e.g. CRB, EPEL, or any other mirror path you have
-  # rocky9-crb:
-  #   upstream_url: "https://download.rockylinux.org/pub/rocky/9/CRB/x86_64/os/"
-
-# Packages required on the mirror host (CentOS 9 / Rocky 9 / RHEL 9)
-dnf_repo_sync_packages:
-  - dnf-utils
-  - createrepo
-  - rsync
-  - firewalld
