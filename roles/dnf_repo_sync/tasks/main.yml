@@ -1,23 +1,25 @@
 ---
-# dnf_repo_sync tasks - supports from-scratch creation, clean, and upgrade of existing mirrors
-# Fully idempotent. Sources defined as dict in defaults/vars.
+# dnf_repo_sync tasks - 支持定位位置、定时更新、清空重建、增量同步
 
-- name: Handle CLEAN / PURGE when requested (dnf_repo_sync_clean=true or state=absent)
+# 1. 清空重建逻辑（从0开始）
+- name: Clean local mirror when requested
   ansible.builtin.file:
     path: "{{ dnf_repo_sync_base_path }}"
     state: absent
   when:
     - (dnf_repo_sync_clean | bool) or (dnf_repo_sync_state == 'absent')
-  tags: [clean, purge, absent]
+  tags: [clean, purge]
 
-- name: Ensure required packages are installed (CentOS 9 / Rocky 9 / RHEL 9)
+# 2. 安装必要包
+- name: Install required packages
   ansible.builtin.package:
-    name: "{{ dnf_repo_sync_packages }}"
+    name: "{{ dnf_repo_sync_packages | default(['dnf-utils', 'createrepo', 'rsync', 'firewalld']) }}"
     state: present
   when: dnf_repo_sync_state == 'present'
-  tags: [packages, dnf]
+  tags: [packages]
 
-- name: Create base mirror directory
+# 3. 创建基础目录
+- name: Ensure base directory exists
   ansible.builtin.file:
     path: "{{ dnf_repo_sync_base_path }}"
     state: directory
@@ -25,60 +27,93 @@
     group: "{{ dnf_repo_sync_repo_group }}"
     mode: '0755'
   when: dnf_repo_sync_state == 'present'
-  tags: [directories, present]
+  tags: [directories]
 
-# === Main sync loop for each source in the dict ===
-- name: Sync each repository from the provided upstream_url (exact path mirroring)
+# 4. 主同步循环（支持自定义 local_path）
+- name: Sync each source to its specified location
   block:
-    - name: Ensure local target directory exists for {{ item.key }}
+    - name: Create target directory for {{ item.key }}
       ansible.builtin.file:
-        path: "{{ dnf_repo_sync_base_path }}/{{ item.key }}"
+        path: "{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
         state: directory
         owner: "{{ dnf_repo_sync_repo_owner }}"
         group: "{{ dnf_repo_sync_repo_group }}"
         mode: '0755'
-      tags: [directories, present]
 
-    - name: Synchronize packages + metadata from upstream (using direct URL)
+    - name: Run reposync for {{ item.key }}
       ansible.builtin.command:
         cmd: >-
           reposync
           --repofrompath={{ item.key }},{{ item.value.upstream_url }}
           -r {{ item.key }}
-          -p {{ dnf_repo_sync_base_path }}/{{ item.key }}
+          -p "{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
           {{ dnf_repo_sync_reposync_options }}
-        creates: "{{ dnf_repo_sync_base_path }}/{{ item.key }}/repodata/repomd.xml"
       register: sync_result
       changed_when: sync_result.rc == 0
-      tags: [sync, reposync, present]
-      # Note: 'creates' gives basic idempotency. Remove the creates line or use --force if you want to always check for updates.
+      # 移除 creates 条件，每次都检查更新，更适合定时任务
 
-    - name: Rebuild repository metadata (createrepo --update)
+    - name: Update metadata with createrepo
       ansible.builtin.command:
-        cmd: createrepo --update {{ dnf_repo_sync_base_path }}/{{ item.key }}
-      tags: [createrepo, metadata, present]
+        cmd: createrepo --update "{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
       changed_when: false
 
   loop: "{{ dnf_repo_sync_sources | dict2items }}"
   when: dnf_repo_sync_state == 'present'
-  tags: [sync, present]
+  tags: [sync, reposync]
 
-# === Web server, firewall, SELinux (only when serving) ===
-- name: Install and start web server to serve the mirrored repos
+# 5. 部署自动更新脚本 + cron
+- name: Deploy auto-update script when scheduled updates are enabled
   block:
-    - name: Install web server package
+    - name: Create update script from template
+      ansible.builtin.template:
+        src: update-dnf-repos.sh.j2
+        dest: /usr/local/bin/update-dnf-repos.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create cron job for scheduled sync
+      ansible.builtin.cron:
+        name: "{{ dnf_repo_sync_cron_job_name }}"
+        minute: "{{ dnf_repo_sync_cron_minute }}"
+        hour: "{{ dnf_repo_sync_cron_hour }}"
+        day: "{{ dnf_repo_sync_cron_day }}"
+        month: "{{ dnf_repo_sync_cron_month }}"
+        weekday: "{{ dnf_repo_sync_cron_weekday }}"
+        job: "/usr/local/bin/update-dnf-repos.sh >> /var/log/dnf-repo-sync.log 2>&1"
+        user: root
+        state: present
+
+    - name: Ensure log file exists
+      ansible.builtin.file:
+        path: /var/log/dnf-repo-sync.log
+        state: touch
+        owner: root
+        group: root
+        mode: '0644'
+        modification_time: preserve
+        access_time: preserve
+  when:
+    - dnf_repo_sync_auto_update | bool
+    - dnf_repo_sync_state == 'present'
+  tags: [cron, schedule, auto-update]
+
+# 6. Web 服务、防火墙、SELinux
+- name: Setup web server to serve the mirror
+  block:
+    - name: Install web server
       ansible.builtin.package:
         name: "{{ dnf_repo_sync_web_server }}"
         state: present
 
-    - name: Ensure web server is running and enabled
+    - name: Start and enable web server
       ansible.builtin.service:
         name: "{{ dnf_repo_sync_web_server }}"
         state: started
         enabled: true
       notify: Restart web server
 
-    - name: Configure SELinux for web content (if enabled)
+    - name: SELinux configuration
       ansible.posix.seboolean:
         name: httpd_can_network_connect
         state: true
@@ -87,9 +122,9 @@
   when:
     - dnf_repo_sync_serve_repos | bool
     - dnf_repo_sync_state == 'present'
-  tags: [web, nginx, httpd, serve]
+  tags: [web, serve]
 
-- name: Open required firewall ports
+- name: Configure firewall
   ansible.posix.firewalld:
     port: "{{ item }}"
     permanent: true
@@ -102,14 +137,11 @@
   notify: Reload firewalld
   tags: [firewall]
 
-- name: Show completion summary
+- name: Completion message
   ansible.builtin.debug:
     msg: |
-      ✅ dnf_repo_sync completed (state={{ dnf_repo_sync_state }}).
-      Local mirror root: {{ dnf_repo_sync_base_path }}/
-      {% if dnf_repo_sync_serve_repos %}
-      Serve URL example: http://{{ ansible_host | default(ansible_default_ipv4.address) }}/repos/<repo-key>/
-      {% endif %}
-      Edit dnf_repo_sync_sources in defaults/vars/group_vars to change what gets mirrored.
+      ✅ dnf_repo_sync 完成！
+      本地镜像位置: {{ dnf_repo_sync_base_path }}/
+      {% if dnf_repo_sync_auto_update %} 已启用定时更新（每天 {{ dnf_repo_sync_cron_hour }}:{{ dnf_repo_sync_cron_minute }} 执行）{% endif %}
   when: dnf_repo_sync_state == 'present'
-  tags: [info, debug]
+  tags: [info]
