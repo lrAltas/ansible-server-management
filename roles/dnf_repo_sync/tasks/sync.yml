@@ -1,0 +1,41 @@
+---
+# 仓库同步主任务 - 带进度提示
+
+- name: Start repository synchronization
+  ansible.builtin.debug:
+    msg: "🔄 正在开始同步仓库，请耐心等待... (reposync 可能需要几分钟到几小时)"
+  when: dnf_repo_sync_state == 'present'
+
+- name: Synchronize each source with visible progress
+  block:
+    - name: "▶️ 开始同步: {{ item.key }}"
+      ansible.builtin.debug:
+        msg: |
+          ▶️ 开始同步: {{ item.key }}
+          来源: {{ item.value.upstream_url }}
+          目标: {% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}
+
+    - name: Run reposync (async mode for progress visibility)
+      ansible.builtin.command:
+        cmd: >-
+          reposync
+          --repofrompath={{ item.key }},{{ item.value.upstream_url }}
+          -r {{ item.key }}
+          -p "{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
+          {{ dnf_repo_sync_reposync_options }}
+      async: 7200          # 最长运行 2 小时
+      poll: 20           # 每 20 秒打印一次状态，让你看到进度
+      register: sync_result
+      changed_when: sync_result.rc == 0
+
+    - name: "✅ {{ item.key }} 同步完成"
+      ansible.builtin.debug:
+        msg: "✅ {{ item.key }} 同步完成！"
+
+    - name: Update metadata
+      ansible.builtin.command:
+        cmd: createrepo --update "{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
+      changed_when: false
+
+  loop: "{{ dnf_repo_sync_sources | dict2items }}"
+  when: dnf_repo_sync_state == 'present'
