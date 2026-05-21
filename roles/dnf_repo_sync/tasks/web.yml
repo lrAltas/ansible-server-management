@@ -1,0 +1,26 @@
+---
+# Web 服务器配置
+- name: Install and start web server
+  block:
+    - name: Install web server package
+      ansible.builtin.package:
+        name: "{{ dnf_repo_sync_web_server }}"
+        state: present
+
+    - name: Start and enable web server
+      ansible.builtin.service:
+        name: "{{ dnf_repo_sync_web_server }}"
+        state: started
+        enabled: true
+      notify: Restart web server
+
+    - name: SELinux configuration for web content
+      ansible.posix.seboolean:
+        name: httpd_can_network_connect
+        state: true
+        persistent: true
+      when: ansible_selinux.status == 'enabled'
+  when:
+    - dnf_repo_sync_serve_repos | bool
+    - dnf_repo_sync_state == 'present'
+  tags: [web]
