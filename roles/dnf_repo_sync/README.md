@@ -4,6 +4,52 @@
 
 该角色用于在指定服务器上建立、维护并定时更新 DNF/YUM 本地镜像仓库，适用于内网环境、带宽优化及离线部署场景。
 
+---
+
+## 📝 快速配置说明书（必读）
+
+**你只需要修改一个文件** 即可完成部署：`roles/dnf_repo_sync/vars/main.yml`
+
+### 必须修改的变量（核心）
+
+| 变量 | 说明 | 示例值 |
+|---------|---------|----------|
+| `dnf_repo_sync_sources` | **最重要**！你要同步的上游仓库列表（字典形式） | 见下方详细示例 |
+
+**`dnf_repo_sync_sources` 配置示例** (请直接替换为你的地址)：
+
+```yaml
+dnf_repo_sync_sources:
+  rocky-9-baseos:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
+    # local_path: "/var/www/html/repos/rocky/9/BaseOS/x86_64/os"   # 可选，不填则默认使用 base_path/短名
+
+  rocky-9-appstream:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
+
+  # 可以继续添加更多仓库
+  # rocky-9-crb:
+  #   upstream_url: "https://download.rockylinux.org/pub/rocky/9/CRB/x86_64/os/"
+```
+
+### 强烈建议修改的变量
+
+| 变量 | 说明 | 建议值 |
+|---------|---------|----------|
+| `dnf_repo_sync_auto_update` | 是否启用每天自动同步 | `true` (生产环境强烈建议) |
+| `dnf_repo_sync_cron_hour` | 定时任务执行时间（小时） | `"3"` (凌晨 3 点，避开高峰) |
+| `dnf_repo_sync_base_path` | 本地镜像根目录 | `/var/www/html/repos` (建议保持默认) |
+
+### 可选修改的变量（高级）
+
+| 变量 | 说明 | 默认值 |
+|---------|---------|----------|
+| `dnf_repo_sync_clean` | 是否清空后重建（用于从0开始） | `false` |
+| `dnf_repo_sync_reposync_options` | reposync 参数 | `--download-metadata --downloadcomps --delete --newest-only` |
+| `dnf_repo_sync_web_server` | Web 服务器类型 | `nginx` |
+
+---
+
 ## 功能特性
 
 - 支持任意上游路径镜像（直接给完整 URL 即可）
@@ -12,7 +58,7 @@
 - 内置定时任务（cron），每天自动更新
 - 可选部署 Nginx/HTTPD 提供 HTTP 访问
 - 完整的防火墙与 SELinux 配置
-- 高度可配置，所有参数均可在 vars/main.yml 中一键修改
+- 高度可配置，所有参数均可在 `vars/main.yml` 中一键修改
 
 ## 目录结构建议（强烈建议使用）
 
@@ -50,19 +96,13 @@
 centos9-mirror ansible_host=192.168.1.50 ansible_user=root
 ```
 
-### 2. 配置要同步的源
+### 2. 修改配置文件
 
-编辑 `roles/dnf_repo_sync/vars/main.yml` 中的 `dnf_repo_sync_sources` 字典：
+打开 `roles/dnf_repo_sync/vars/main.yml`，主要修改以下内容：
 
-```yaml
-dnf_repo_sync_sources:
-  rocky-9-baseos:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
-    local_path: "{{ dnf_repo_sync_base_path }}/rocky/9/BaseOS/x86_64/os"   # 可选
-
-  rocky-9-appstream:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
-```
+1. `dnf_repo_sync_sources` — 填入你的上游地址
+2. `dnf_repo_sync_auto_update: true` — 开启自动更新
+3. `dnf_repo_sync_cron_hour` — 调整执行时间
 
 ### 3. 执行同步
 
@@ -70,29 +110,15 @@ dnf_repo_sync_sources:
 ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers
 ```
 
-### 4. 启用定时自动更新（强烈建议）
+### 4. 检查定时任务
 
-在 `vars/main.yml` 中设置：
-
-```yaml
-dnf_repo_sync_auto_update: true
-dnf_repo_sync_cron_hour: "3"      # 每天凌晨 3 点
+```bash
+crontab -l | grep update-dnf-repos
 ```
-
-然后再次执行上面的 playbook 即可。
 
 ## 变量详解
 
 主要配置均在 `vars/main.yml` 中，并附带详细注释。
-
-| 变量 | 说明 | 默认值 |
-|---------|---------|----------|
-| `dnf_repo_sync_base_path` | 本地镜像根目录 | `/var/www/html/repos` |
-| `dnf_repo_sync_sources` | 要同步的源列表（字典） | `{}` |
-| `dnf_repo_sync_auto_update` | 是否启用定时任务 | `false` |
-| `dnf_repo_sync_cron_hour` | 定时任务执行时间（小时） | `"3"` |
-| `dnf_repo_sync_clean` | 是否清空后重建 | `false` |
-| `dnf_repo_sync_reposync_options` | reposync 参数 | `--download-metadata --downloadcomps --delete --newest-only` |
 
 ## 定时自动更新机制
 
@@ -101,8 +127,6 @@ dnf_repo_sync_cron_hour: "3"      # 每天凌晨 3 点
 - `/usr/local/bin/update-dnf-repos.sh` — 自动生成的同步脚本
 - `/var/log/dnf-repo-sync.log` — 同步日志
 - cron 任务（默认每天凌晨 3 点）
-
-可以通过 `crontab -l` 查看定时任务。
 
 ## 客户端配置示例
 
@@ -140,7 +164,6 @@ ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers -e "dnf_repo_sync_
 
 - 首次运行可能需要几十分钟到几小时，请耐心等待
 - 建议生产环境开启 `auto_update`
-- 如果上游支持 rsync 协议，可以手动替换为 rsync 命令以提高速度
 - 日志文件位于 `/var/log/dnf-repo-sync.log`
 
 ## 授权许可
