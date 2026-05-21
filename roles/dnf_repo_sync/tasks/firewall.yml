@@ -1,0 +1,14 @@
+---
+# 防火墙与 SELinux
+- name: Open firewall ports
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ dnf_repo_sync_firewall_ports }}"
+  when:
+    - dnf_repo_sync_manage_firewall | bool
+    - dnf_repo_sync_state == 'present'
+  notify: Reload firewalld
+  tags: [firewall]
