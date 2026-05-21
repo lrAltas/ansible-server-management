@@ -1,0 +1,22 @@
+---
+# 创建目录结构
+- name: Ensure base mirror directory exists
+  ansible.builtin.file:
+    path: "{{ dnf_repo_sync_base_path }}"
+    state: directory
+    owner: "{{ dnf_repo_sync_repo_owner }}"
+    group: "{{ dnf_repo_sync_repo_group }}"
+    mode: '0755'
+  when: dnf_repo_sync_state == 'present'
+  tags: [directories]
+
+- name: Create per-repository target directories (respecting local_path if set)
+  ansible.builtin.file:
+    path: "{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
+    state: directory
+    owner: "{{ dnf_repo_sync_repo_owner }}"
+    group: "{{ dnf_repo_sync_repo_group }}"
+    mode: '0755'
+  loop: "{{ dnf_repo_sync_sources | dict2items }}"
+  when: dnf_repo_sync_state == 'present'
+  tags: [directories]
