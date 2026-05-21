@@ -1,0 +1,8 @@
+---
+# 安装必要的系统包
+- name: Install packages required for mirroring
+  ansible.builtin.package:
+    name: "{{ dnf_repo_sync_packages | default(['dnf-utils', 'createrepo', 'rsync', 'firewalld']) }}"
+    state: present
+  when: dnf_repo_sync_state == 'present'
+  tags: [packages]
