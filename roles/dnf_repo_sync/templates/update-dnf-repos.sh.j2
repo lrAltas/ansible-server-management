@@ -1,0 +1,37 @@
+#!/bin/bash
+# ============================================================
+# dnf_repo_sync - 自动更新脚本
+# 由 Ansible 角色自动生成，请勿手动修改
+# ============================================================
+
+set -euo pipefail
+
+BASE_PATH="{{ dnf_repo_sync_base_path }}"
+REPOSYNC_OPTIONS="{{ dnf_repo_sync_reposync_options }}"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+log "开始同步 DNF 镜像仓库..."
+
+{% for item in dnf_repo_sync_sources | dict2items %}
+# --- {{ item.key }} ---
+LOCAL_DIR="{% if item.value.local_path is defined %}{{ item.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ item.key }}{% endif %}"
+UPSTREAM="{{ item.value.upstream_url }}"
+
+log "正在同步: {{ item.key }} <- $UPSTREAM"
+mkdir -p "$LOCAL_DIR"
+
+reposync --repofrompath={{ item.key }},$UPSTREAM \
+         -r {{ item.key }} \
+         -p "$LOCAL_DIR" \
+         $REPOSYNC_OPTIONS || log "WARNING: {{ item.key }} sync had issues"
+
+createrepo --update "$LOCAL_DIR" || log "WARNING: createrepo failed for {{ item.key }}"
+
+log "{{ item.key }} 同步完成"
+
+{% endfor %}
+
+log "所有镜像同步完成！"
