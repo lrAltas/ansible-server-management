@@ -1,0 +1,17 @@
+---
+# 完成总结
+- name: Final completion message
+  ansible.builtin.debug:
+    msg: |
+      ✅ dnf_repo_sync 执行完成！
+
+      本地镜像位置: {{ dnf_repo_sync_base_path }}/
+      {% if dnf_repo_sync_auto_update %}
+      定时更新: 已启用（每天 {{ dnf_repo_sync_cron_hour }}:{{ dnf_repo_sync_cron_minute }} 执行）
+      日志文件: /var/log/dnf-repo-sync.log
+      {% endif %}
+
+      你可以通过以下命令查看状态：
+        tail -f /var/log/dnf-repo-sync.log
+  when: dnf_repo_sync_state == 'present'
+  tags: [summary]
