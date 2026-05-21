@@ -1,75 +1,148 @@
 # dnf_repo_sync
 
-**专为 CentOS 9 / Rocky 9 / RHEL 9 设计的本地 DNF 源镜像角色**（从0开始创建 + 增量升级 + 清除重建）。
+**CentOS 9 / Rocky 9 / RHEL 9 本地 DNF 镜像仓库自动化管理角色**
 
-## 核心特性（完全按你的需求实现）
+该角色用于在指定服务器上建立、维护并定时更新 DNF/YUM 本地镜像仓库，适用于内网环境、带宽优化及离线部署场景。
 
-- ✅ **字典形式配置源**：在 `defaults/main.yml` 或 `group_vars` 里用 dict 定义要同步的路径，你直接给 upstream_url，角色就同步该路径下的所有包 + metadata。
-- ✅ **从0开始创建本地源** + **支持清除重建**（`dnf_repo_sync_clean: true` 或 `state: absent`）。
-- ✅ **幂等性**：反复执行安全，已存在的仓库会增量同步新包。
-- ✅ **全变量驱动**：本地路径、web server、防火墙、包列表全部可配置。
-- ✅ **直接从 inventory 取主机**：使用你填写的 `ansible_host`。
-- 使用 `reposync --repofrompath` 实现“给什么路径就同步什么路径下的内容”。
+## 功能特性
 
-## 变量配置（全部在 defaults/main.yml，你直接编辑）
+- 支持任意上游路径镜像（直接给完整 URL 即可）
+- 可自定义本地存放位置，目录结构清晰、易于管理
+- 支持从零开始重建和增量同步
+- 内置定时任务（cron），每天自动更新
+- 可选部署 Nginx/HTTPD 提供 HTTP 访问
+- 完整的防火墙与 SELinux 配置
+- 高度可配置，所有参数均可在 vars/main.yml 中一键修改
 
-```yaml
-# 1. 本地仓库根目录
-dnf_repo_sync_base_path: /var/www/html/repos
+## 目录结构建议（强烈建议使用）
 
-# 2. 同步状态与清理
-dnf_repo_sync_state: present          # present=创建/同步, absent=删除本地镜像
-dnf_repo_sync_clean: false            # true 时先清空再重建（慎用）
-
-# 3. 要同步的源（字典形式 - 你改这里）
-dnf_repo_sync_sources:
-  rocky9-baseos:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
-  rocky9-appstream:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
-  # 添加任意你想要的路径
+```
+/var/www/html/repos/
+├── rocky/
+│   ├── 9/
+│       ├── BaseOS/
+│       │   └── x86_64/
+│       │       └── os/
+│       └── AppStream/
+│           └── x86_64/
+│               └── os/
+├── centos/
+│   └── 9-stream/
+│       └── BaseOS/
+│           └── x86_64/
+│               └── os/
+└── epel/
+    └── 9/
+        └── Everything/
+            └── x86_64/
 ```
 
-## 使用方法
+这种结构方便按发行版、架构、组件进行分类管理。
 
-1. 编辑 inventory/hosts，填入你的 CentOS 9 源服务器：
-   ```ini
-   [dnf_repo_servers]
-   centos9-mirror ansible_host=10.0.0.50 ansible_user=root
-   ```
+## 快速开始
 
-2. 编辑 `roles/dnf_repo_sync/defaults/main.yml`（或新建 group_vars/all.yml），修改：
-   - `dnf_repo_sync_sources` 里的 upstream_url（直接粘贴你想同步的完整路径）
-   - `dnf_repo_sync_base_path` 等其他变量
+### 1. 配置主机
 
-3. 执行同步（首次或增量升级）：
-   ```bash
-   ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers
-   ```
+在 `inventory/hosts` 中添加你的镜像服务器：
 
-4. **全新重建**（清空后从0开始）：
-   ```bash
-   ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers -e "dnf_repo_sync_clean=true"
-   ```
+```ini
+[dnf_repo_servers]
+centos9-mirror ansible_host=192.168.1.50 ansible_user=root
+```
 
-5. **删除本地镜像**：
-   ```bash
-   ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers -e "dnf_repo_sync_state=absent"
-   ```
+### 2. 配置要同步的源
+
+编辑 `roles/dnf_repo_sync/vars/main.yml` 中的 `dnf_repo_sync_sources` 字典：
+
+```yaml
+dnf_repo_sync_sources:
+  rocky-9-baseos:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
+    local_path: "{{ dnf_repo_sync_base_path }}/rocky/9/BaseOS/x86_64/os"   # 可选
+
+  rocky-9-appstream:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
+```
+
+### 3. 执行同步
+
+```bash
+ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers
+```
+
+### 4. 启用定时自动更新（强烈建议）
+
+在 `vars/main.yml` 中设置：
+
+```yaml
+dnf_repo_sync_auto_update: true
+dnf_repo_sync_cron_hour: "3"      # 每天凌晨 3 点
+```
+
+然后再次执行上面的 playbook 即可。
+
+## 变量详解
+
+主要配置均在 `vars/main.yml` 中，并附带详细注释。
+
+| 变量 | 说明 | 默认值 |
+|---------|---------|----------|
+| `dnf_repo_sync_base_path` | 本地镜像根目录 | `/var/www/html/repos` |
+| `dnf_repo_sync_sources` | 要同步的源列表（字典） | `{}` |
+| `dnf_repo_sync_auto_update` | 是否启用定时任务 | `false` |
+| `dnf_repo_sync_cron_hour` | 定时任务执行时间（小时） | `"3"` |
+| `dnf_repo_sync_clean` | 是否清空后重建 | `false` |
+| `dnf_repo_sync_reposync_options` | reposync 参数 | `--download-metadata --downloadcomps --delete --newest-only` |
+
+## 定时自动更新机制
+
+启用后，角色会在目标机器上生成以下文件：
+
+- `/usr/local/bin/update-dnf-repos.sh` — 自动生成的同步脚本
+- `/var/log/dnf-repo-sync.log` — 同步日志
+- cron 任务（默认每天凌晨 3 点）
+
+可以通过 `crontab -l` 查看定时任务。
+
+## 客户端配置示例
+
+在其他服务器上创建 `/etc/yum.repos.d/rocky-local.repo`：
+
+```ini
+[rocky-9-baseos-local]
+name=Rocky 9 BaseOS Local
+baseurl=http://your-mirror-ip/repos/rocky/9/BaseOS/x86_64/os/
+enabled=1
+gpgcheck=0
+
+[rocky-9-appstream-local]
+name=Rocky 9 AppStream Local
+baseurl=http://your-mirror-ip/repos/rocky/9/AppStream/x86_64/os/
+enabled=1
+gpgcheck=0
+```
+
+## 高级用法
+
+### 从零重建整个镜像
+
+```bash
+ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers -e "dnf_repo_sync_clean=true"
+```
+
+### 删除本地镜像
+
+```bash
+ansible-playbook playbooks/sync_repos.yml -l dnf_repo_servers -e "dnf_repo_sync_state=absent"
+```
 
 ## 注意事项
 
-- 第一次运行会下载大量包，根据你的网络和上游速度而定。
-- 建议配合 `--newest-only`（已在默认 options 里）节省空间。
-- Web 服务默认使用 nginx，可通过变量切换成 httpd。
-- 如需更复杂的 nginx 配置（自定义 server_name、location 等），告诉我，我继续完善。
-- 客户端可将 /etc/yum.repos.d/ 里的 baseurl 改成 `http://你的IP/repos/<key>/`
+- 首次运行可能需要几十分钟到几小时，请耐心等待
+- 建议生产环境开启 `auto_update`
+- 如果上游支持 rsync 协议，可以手动替换为 rsync 命令以提高速度
+- 日志文件位于 `/var/log/dnf-repo-sync.log`
 
-## 下一步可以继续完善的点（告诉我你要不要）
-- 自动生成客户端 .repo 文件的 task
-- 支持 rsync:// 协议（比 http 更快）
-- 定时同步（systemd timer）
-- 更精细的 nginx 配置模板
-- 多架构支持（aarch64 等）
+## 授权许可
 
-仓库已按你的要求重构完毕，可以直接使用！
+MIT License
