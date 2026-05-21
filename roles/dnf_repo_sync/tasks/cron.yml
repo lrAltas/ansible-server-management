@@ -1,0 +1,37 @@
+---
+# 定时更新配置
+- name: Deploy auto-update script and cron job
+  block:
+    - name: Generate update script
+      ansible.builtin.template:
+        src: update-dnf-repos.sh.j2
+        dest: /usr/local/bin/update-dnf-repos.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create cron job
+      ansible.builtin.cron:
+        name: "{{ dnf_repo_sync_cron_job_name }}"
+        minute: "{{ dnf_repo_sync_cron_minute }}"
+        hour: "{{ dnf_repo_sync_cron_hour }}"
+        day: "{{ dnf_repo_sync_cron_day }}"
+        month: "{{ dnf_repo_sync_cron_month }}"
+        weekday: "{{ dnf_repo_sync_cron_weekday }}"
+        job: "/usr/local/bin/update-dnf-repos.sh >> /var/log/dnf-repo-sync.log 2>&1"
+        user: root
+        state: present
+
+    - name: Ensure log file exists
+      ansible.builtin.file:
+        path: /var/log/dnf-repo-sync.log
+        state: touch
+        owner: root
+        group: root
+        mode: '0644'
+        modification_time: preserve
+        access_time: preserve
+  when:
+    - dnf_repo_sync_auto_update | bool
+    - dnf_repo_sync_state == 'present'
+  tags: [cron]
