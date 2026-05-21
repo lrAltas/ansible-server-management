@@ -1,3 +1,70 @@
 ---
-# Internal variables for dnf_repo_sync (override in defaults or group_vars if needed)
-# Currently empty - add computed vars here if role grows complex
+# ============================================================
+# dnf_repo_sync 角色 - 用户配置区（请在这里修改）
+# ============================================================
+# 这个文件是你主要编辑的地方，所有重要参数都在这里，并且带有详细注释。
+# 修改后直接保存即可生效。
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. 基础路径配置（建议保持默认或按你的习惯修改）
+# ------------------------------------------------------------
+dnf_repo_sync_base_path: /var/www/html/repos          # 镜像仓库根目录，建议使用这个位置，方便统一管理
+ndnf_repo_sync_repo_owner: root
+dnf_repo_sync_repo_group: root
+
+# ------------------------------------------------------------
+# 2. 要同步的源列表（核心配置 - 字典形式）
+# ------------------------------------------------------------
+# 格式说明：
+#   短名称:                    # 唯一标识（建议用小写带中划线）
+#     upstream_url: "完整的上游路径"   # 必填，直接粘贴你要镜像的完整目录URL
+#     local_path: "/指定的/本地/路径" # 可选，不填则默认使用 base_path/短名称
+#
+# 推荐结构（易于管理）：
+#   /var/www/html/repos/
+#     ├── rocky/9/BaseOS/x86_64/os/
+#     ├── rocky/9/AppStream/x86_64/os/
+#     ├── centos/9-stream/BaseOS/x86_64/os/
+#     └── epel/9/Everything/x86_64/
+#
+# 示例（CentOS 9 / Rocky 9，请根据你的需求修改 upstream_url）:
+dnf_repo_sync_sources:
+  rocky-9-baseos:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
+    # local_path: "{{ dnf_repo_sync_base_path }}/rocky/9/BaseOS/x86_64/os"   # 取消注释即可自定义位置
+
+  rocky-9-appstream:
+    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
+
+  # 可以继续添加任何你需要的源
+  # rocky-9-crb:
+  #   upstream_url: "https://download.rockylinux.org/pub/rocky/9/CRB/x86_64/os/"
+
+  # epel-9:
+  #   upstream_url: "https://download.fedoraproject.org/pub/epel/9/Everything/x86_64/"
+
+# ------------------------------------------------------------
+# 3. 定时自动更新配置（生产环境强烈建议开启）
+# ------------------------------------------------------------
+dnf_repo_sync_auto_update: false          # 是否启用定时同步（true = 每天自动更新）
+dnf_repo_sync_cron_minute: "0"
+dnf_repo_sync_cron_hour: "3"              # 每天凌晨 3 点执行（避开高峰）
+dnf_repo_sync_cron_day: "*"
+dnf_repo_sync_cron_month: "*"
+dnf_repo_sync_cron_weekday: "*"
+dnf_repo_sync_cron_job_name: "update-dnf-repos"   # cron 任务名称
+
+# ------------------------------------------------------------
+# 4. 其他行为控制
+# ------------------------------------------------------------
+dnf_repo_sync_clean: false                # 是否在同步前清空本地镜像（用于从0开始重建）
+dnf_repo_sync_state: present              # present=创建/同步, absent=删除本地镜像
+dnf_repo_sync_reposync_options: "--download-metadata --downloadcomps --delete --newest-only"
+dnf_repo_sync_serve_repos: true
+dnf_repo_sync_web_server: nginx
+dnf_repo_sync_manage_firewall: true
+dnf_repo_sync_firewall_ports:
+  - "80/tcp"
+  - "443/tcp"
+dnf_repo_sync_manage_selinux: true
