@@ -1,0 +1,48 @@
+---
+# 暂时禁用系统 yum 源（防止 reposync 使用机器上已有的 repo）
+
+- name: Backup existing system repo files
+  ansible.builtin.shell:
+    cmd: |
+      BACKUP_DIR="/etc/yum.repos.d/backup-{{ ansible_date_time.iso8601_basic_short }}"
+      mkdir -p "$BACKUP_DIR"
+      if ls /etc/yum.repos.d/*.repo 1> /dev/null 2>&1; then
+        mv /etc/yum.repos.d/*.repo "$BACKUP_DIR/"
+        echo "已备份 $(ls "$BACKUP_DIR" | wc -l) 个 repo 文件到 $BACKUP_DIR"
+      else
+        echo "未发现任何 .repo 文件，无需备份"
+      fi
+  register: backup_result
+  changed_when: backup_result.stdout != ""
+  when: dnf_repo_sync_disable_system_repos | bool
+
+- name: Show backup message
+  ansible.builtin.debug:
+    msg: "{{ backup_result.stdout | default('未执行备份') }}"
+  when: dnf_repo_sync_disable_system_repos | bool
+
+- name: Temporarily disable all system repositories for clean sync
+  ansible.builtin.debug:
+    msg: |
+      ⚠️ 正在暂时禁用系统所有 yum 源...
+      原因: 防止 reposync 使用机器上已安装的 repo 导致同步错误的内容
+      同步完成后会自动恢复
+  when: dnf_repo_sync_disable_system_repos | bool
+
+- name: Restore system repo files after sync
+  ansible.builtin.shell:
+    cmd: |
+      BACKUP_DIR=$(ls -d /etc/yum.repos.d/backup-* 2>/dev/null | tail -1)
+      if [ -d "$BACKUP_DIR" ]; then
+        mv "$BACKUP_DIR"/*.repo /etc/yum.repos.d/ 2>/dev/null || true
+        rmdir "$BACKUP_DIR" 2>/dev/null || true
+        echo "已恢复系统 repo 文件"
+      fi
+  register: restore_result
+  changed_when: restore_result.stdout != ""
+  when: dnf_repo_sync_disable_system_repos | bool
+
+- name: Show restore message
+  ansible.builtin.debug:
+    msg: "{{ restore_result.stdout | default('未恢复 repo') }}"
+  when: dnf_repo_sync_disable_system_repos | bool
