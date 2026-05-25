@@ -1,5 +1,24 @@
 ---
-# 完成总结
+# 完成总结 + 恢复系统 repo
+
+- name: Restore system repo files after sync
+  ansible.builtin.shell:
+    cmd: |
+      BACKUP_DIR=$(ls -d /etc/yum.repos.d/backup-* 2>/dev/null | tail -1)
+      if [ -d "$BACKUP_DIR" ]; then
+        mv "$BACKUP_DIR"/*.repo /etc/yum.repos.d/ 2>/dev/null || true
+        rmdir "$BACKUP_DIR" 2>/dev/null || true
+        echo "已恢复系统 repo 文件"
+      fi
+  register: restore_result
+  changed_when: restore_result.stdout != ""
+  when: dnf_repo_sync_disable_system_repos | bool
+
+- name: Show restore message
+  ansible.builtin.debug:
+    msg: "{{ restore_result.stdout | default('未恢复 repo') }}"
+  when: dnf_repo_sync_disable_system_repos | bool
+
 - name: Final completion message
   ansible.builtin.debug:
     msg: |
