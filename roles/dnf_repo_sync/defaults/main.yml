@@ -1,8 +1,11 @@
 ---
 # dnf_repo_sync defaults
-# 这个文件主要用于提供默认值，实际配置请在 vars/main.yml 中修改（更容易维护）
 
-# 以下是与 vars 中相同的默认值，便于角色独立使用
+# 是否在同步前暂时禁用系统所有 yum 源
+# 强烈建议开启，防止 reposync 使用机器上已安装的 repo 导致同步错误内容
+dnf_repo_sync_disable_system_repos: true
+
+# 以下是其他默认值
 
 dnf_repo_sync_base_path: /var/www/html/repos
 dnf_repo_sync_repo_owner: root
