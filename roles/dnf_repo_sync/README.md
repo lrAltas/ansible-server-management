@@ -1,3 +1,4 @@
+---
 # dnf_repo_sync
 
 **CentOS 9 / Rocky 9 / RHEL 9 本地 DNF 镜像仓库自动化管理角色**
@@ -20,16 +21,9 @@
 
 ```yaml
 dnf_repo_sync_sources:
-  rocky-9-baseos:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/"
-    # local_path: "/var/www/html/repos/rocky/9/BaseOS/x86_64/os"   # 可选，不填则默认使用 base_path/短名
-
-  rocky-9-appstream:
-    upstream_url: "https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/"
-
-  # 可以继续添加更多仓库
-  # rocky-9-crb:
-  #   upstream_url: "https://download.rockylinux.org/pub/rocky/9/CRB/x86_64/os/"
+  centos-stream-9-crb:
+    upstream_url: "https://mirrors.huaweicloud.com/centos-stream/9-stream/CRB/x86_64/os/"
+    local_path: "{{ dnf_repo_sync_base_path }}/centos-stream/9/CRB/x86_64/os"
 ```
 
 ### 强烈建议修改的变量
@@ -38,15 +32,42 @@ dnf_repo_sync_sources:
 |---------|---------|----------|
 | `dnf_repo_sync_auto_update` | 是否启用每天自动同步 | `true` (生产环境强烈建议) |
 | `dnf_repo_sync_cron_hour` | 定时任务执行时间（小时） | `"3"` (凌晨 3 点，避开高峰) |
-| `dnf_repo_sync_base_path` | 本地镜像根目录 | `/var/www/html/repos` (建议保持默认) |
+| `dnf_repo_sync_base_path` | 本地镜像根目录 | `/usr/share/nginx/html/repos` |
 
 ### 可选修改的变量（高级）
 
 | 变量 | 说明 | 默认值 |
 |---------|---------|----------|
-| `dnf_repo_sync_clean` | 是否清空后重建（用于从0开始） | `false` |
-| `dnf_repo_sync_reposync_options` | reposync 参数 | `--download-metadata --downloadcomps --delete --newest-only` |
-| `dnf_repo_sync_web_server` | Web 服务器类型 | `nginx` |
+| `dnf_repo_sync_disable_system_repos` | 是否暂时禁用系统 yum 源（强烈建议开启） | `true` |
+| `dnf_repo_sync_clean` | 是否清空后重建 | `false` |
+
+---
+
+## ⚠️ 重要：暂时禁用系统 yum 源（新增功能）
+
+**2026-05-25 新增功能**
+
+如果你的镜像机器上已经安装了其他 yum 源（例如 `dnf repolist` 能看到 baseos/appstream/crb 等），`reposync` 很可能会使用这些系统源，导致同步错误的内容。
+
+本角色默认会自动执行以下操作（可以关闭）：
+
+1. **备份** `/etc/yum.repos.d/` 下所有 `.repo` 文件
+2. **暂时移除** 这些文件（让同步环境完全干净）
+3. **同步完成后自动恢复** 原来的 repo 文件
+
+**输出会显示清晰提示**：
+
+```
+⚠️ 正在暂时禁用系统所有 yum 源...
+已备份 X 个 repo 文件到 /etc/yum.repos.d/backup-...
+已恢复系统 repo 文件
+```
+
+如果你想关闭此功能，在 `vars/main.yml` 中设置：
+
+```yaml
+dnf_repo_sync_disable_system_repos: false
+```
 
 ---
 
