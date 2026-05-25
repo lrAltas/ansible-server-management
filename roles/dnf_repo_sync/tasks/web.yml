@@ -1,11 +1,36 @@
 ---
-# Web 服务器配置
-- name: Install and start web server
+# Web 服务器配置 - 支持目录列表浏览
+
+- name: Install and configure web server for mirror browsing
   block:
     - name: Install web server package
       ansible.builtin.package:
         name: "{{ dnf_repo_sync_web_server }}"
         state: present
+
+    - name: Create Nginx config for mirror directory listing
+      ansible.builtin.copy:
+        dest: /etc/nginx/conf.d/mirror.conf
+        content: |
+          server {
+              listen 80 default_server;
+              server_name _;
+
+              location /repos/ {
+                  alias {{ dnf_repo_sync_base_path }}/;
+                  autoindex on;
+                  autoindex_exact_size off;
+                  autoindex_localtime on;
+              }
+
+              location / {
+                  return 301 /repos/;
+              }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart web server
 
     - name: Start and enable web server
       ansible.builtin.service:
