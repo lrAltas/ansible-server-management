@@ -1,5 +1,5 @@
 ---
-# 暂时禁用系统 yum 源（防止 reposync 使用机器上已有的 repo）
+# 暂时禁用系统 yum 源（在同步前执行）
 
 - name: Backup existing system repo files
   ansible.builtin.shell:
@@ -27,22 +27,4 @@
       ⚠️ 正在暂时禁用系统所有 yum 源...
       原因: 防止 reposync 使用机器上已安装的 repo 导致同步错误的内容
       同步完成后会自动恢复
-  when: dnf_repo_sync_disable_system_repos | bool
-
-- name: Restore system repo files after sync
-  ansible.builtin.shell:
-    cmd: |
-      BACKUP_DIR=$(ls -d /etc/yum.repos.d/backup-* 2>/dev/null | tail -1)
-      if [ -d "$BACKUP_DIR" ]; then
-        mv "$BACKUP_DIR"/*.repo /etc/yum.repos.d/ 2>/dev/null || true
-        rmdir "$BACKUP_DIR" 2>/dev/null || true
-        echo "已恢复系统 repo 文件"
-      fi
-  register: restore_result
-  changed_when: restore_result.stdout != ""
-  when: dnf_repo_sync_disable_system_repos | bool
-
-- name: Show restore message
-  ansible.builtin.debug:
-    msg: "{{ restore_result.stdout | default('未恢复 repo') }}"
   when: dnf_repo_sync_disable_system_repos | bool
