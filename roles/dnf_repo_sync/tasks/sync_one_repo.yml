@@ -13,7 +13,6 @@
     cmd: >-
       reposync
       --repofrompath={{ repo.key }},{{ repo.value.upstream_url }}
-      -r {{ repo.key }}
       -p "{% if repo.value.local_path is defined %}{{ repo.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ repo.key }}{% endif %}"
       {{ dnf_repo_sync_reposync_options }}
   async: 7200
