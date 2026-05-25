@@ -1,0 +1,31 @@
+---
+# 单个仓库的同步任务 (被 sync.yml 调用)
+
+- name: "▶️ 开始同步: {{ repo.key }}"
+  ansible.builtin.debug:
+    msg: |
+      ▶️ 开始同步: {{ repo.key }}
+      来源: {{ repo.value.upstream_url }}
+      目标: {% if repo.value.local_path is defined %}{{ repo.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ repo.key }}{% endif %}
+
+- name: Run reposync for {{ repo.key }} (async for progress)
+  ansible.builtin.command:
+    cmd: >-
+      reposync
+      --repofrompath={{ repo.key }},{{ repo.value.upstream_url }}
+      -r {{ repo.key }}
+      -p "{% if repo.value.local_path is defined %}{{ repo.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ repo.key }}{% endif %}"
+      {{ dnf_repo_sync_reposync_options }}
+  async: 7200
+  poll: 20
+  register: sync_result
+  changed_when: sync_result.rc == 0
+
+- name: "✅ {{ repo.key }} 同步完成"
+  ansible.builtin.debug:
+    msg: "✅ {{ repo.key }} 同步完成！"
+
+- name: Update metadata for {{ repo.key }}
+  ansible.builtin.command:
+    cmd: createrepo --update "{% if repo.value.local_path is defined %}{{ repo.value.local_path }}{% else %}{{ dnf_repo_sync_base_path }}/{{ repo.key }}{% endif %}"
+  changed_when: false
