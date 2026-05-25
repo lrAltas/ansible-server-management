@@ -1,9 +1,11 @@
 ---
 # dnf_repo_sync 主任务入口
-# 已拆分为多个子任务文件，方便查看和维护
 
 - name: Run pre-check and show plan
   ansible.builtin.include_tasks: check.yml
+
+- name: Temporarily disable system repositories (for clean sync)
+  ansible.builtin.include_tasks: disable_system_repos.yml
 
 - name: Install packages
   ansible.builtin.include_tasks: packages.yml
