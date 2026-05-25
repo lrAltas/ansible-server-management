@@ -1,5 +1,5 @@
 ---
-# 完成总结 + 恢复系统 repo
+# 完成总结 + 恢复系统 repo + 输出访问地址
 
 - name: Restore system repo files after sync
   ansible.builtin.shell:
@@ -19,6 +19,35 @@
     msg: "{{ restore_result.stdout | default('未恢复 repo') }}"
   when: dnf_repo_sync_disable_system_repos | bool
 
+- name: Generate and display mirror access URL
+  block:
+    - name: Set mirror URL fact
+      ansible.builtin.set_fact:
+        mirror_url: "http://{{ ansible_default_ipv4.address | default(ansible_fqdn) }}/repos/"
+
+    - name: Display final access information
+      ansible.builtin.debug:
+        msg: |
+          ✅ 仓库已就绪！
+
+          🔗 请访问以下地址浏览仓库：
+             {{ mirror_url }}
+
+          该地址已保存到：/root/mirror-url.txt
+
+    - name: Save mirror URL to file
+      ansible.builtin.copy:
+        dest: /root/mirror-url.txt
+        content: |
+          # DNF Mirror Repository URL
+          # Generated on {{ ansible_date_time.iso8601 }}
+          {{ mirror_url }}
+        owner: root
+        group: root
+        mode: '0644'
+  when: dnf_repo_sync_state == 'present'
+  tags: [summary]
+
 - name: Final completion message
   ansible.builtin.debug:
     msg: |
@@ -29,8 +58,5 @@
       定时更新: 已启用（每天 {{ dnf_repo_sync_cron_hour }}:{{ dnf_repo_sync_cron_minute }} 执行）
       日志文件: /var/log/dnf-repo-sync.log
       {% endif %}
-
-      你可以通过以下命令查看状态：
-        tail -f /var/log/dnf-repo-sync.log
   when: dnf_repo_sync_state == 'present'
   tags: [summary]
