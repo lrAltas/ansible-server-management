@@ -4,14 +4,14 @@
 - name: Run pre-check and show plan
   ansible.builtin.include_tasks: check.yml
 
-- name: Temporarily disable system repositories (for clean sync)
-  ansible.builtin.include_tasks: disable_system_repos.yml
-
-- name: Install packages
+- name: Install packages (while system repos are still available)
   ansible.builtin.include_tasks: packages.yml
 
 - name: Create directories
   ansible.builtin.include_tasks: directories.yml
+
+- name: Temporarily disable system repositories (for clean sync)
+  ansible.builtin.include_tasks: disable_system_repos.yml
 
 - name: Synchronize repositories (with progress feedback)
   ansible.builtin.include_tasks: sync.yml
@@ -25,5 +25,5 @@
 - name: Configure firewall
   ansible.builtin.include_tasks: firewall.yml
 
-- name: Show completion summary
+- name: Show completion summary + restore system repos
   ansible.builtin.include_tasks: summary.yml
